@@ -13,6 +13,9 @@ Description=jupyterhub-singleuser
 Type=simple
 ExecStart={}
 EnvironmentFile=/etc/jupyterhub-singleuser-environment
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu
 
 [Install]
 WantedBy=multi-user.target
@@ -64,10 +67,12 @@ def start(client,
         },
     }, wait=True)
 
-    cmd[0] = "/usr/local/bin/jupyterhub-singleuser"
-    exec_start = subprocess.list2cmdline(cmd)
+    # TODO: this ignore cmd
+    #cmd[0] = "/home/ubuntu/miniconda3/bin/jupyterhub-singleuser"
+    #exec_start = subprocess.list2cmdline(cmd)
     env_file = "\n".join("{}={}".format(k, v) for (k, v) in env.items())
-    unit_file = unit_file_template.format(exec_start)
+    #unit_file = unit_file_template.format(exec_start)
+    unit_file = unit_file_template.format('/bin/bash -c "source /home/ubuntu/miniconda3/etc/profile.d/conda.sh && /home/ubuntu/miniconda3/bin/jupyterhub-singleuser --ip=0.0.0.0"')
     container.files.put("/etc/jupyterhub-singleuser-environment", env_file)
     container.files.put("/etc/systemd/system/jupyterhub-singleuser.service", unit_file)
     container.start()
@@ -75,10 +80,14 @@ def start(client,
     # Wait for the single-user process to be running, which implies that the
     # container has a network address assigned.
     for i in range(start_timeout):
-        running = poll()
+        running = poll(client, container_name)
         if running is None:
             addr = _container_addr(container)
-            port = 1234 # XXX
+
+            # The port doesn't need to be random because each instance runs on
+            # a different container, and is easier since is the default for
+            # jupyterhub-singleuser
+            port = 8888
             return addr, port
             #return self.user.server.ip, self.user.server.port
         time.sleep(1)
