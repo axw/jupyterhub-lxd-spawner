@@ -63,16 +63,13 @@ def start(client,
             #
             # TODO(axw) make it possible to use remote
             # image source
-            'alias': 'jupyterhub/singleuser',
+            'alias': 'jupyterhub-singleuser',
         },
     }, wait=True)
 
-    # TODO: this ignore cmd
-    #cmd[0] = "/home/ubuntu/miniconda3/bin/jupyterhub-singleuser"
-    #exec_start = subprocess.list2cmdline(cmd)
+    exec_start = subprocess.list2cmdline(cmd)
     env_file = "\n".join("{}={}".format(k, v) for (k, v) in env.items())
-    #unit_file = unit_file_template.format(exec_start)
-    unit_file = unit_file_template.format('/bin/bash -c "source /home/ubuntu/miniconda3/etc/profile.d/conda.sh && /home/ubuntu/miniconda3/bin/jupyterhub-singleuser --ip=0.0.0.0"')
+    unit_file = unit_file_template.format(exec_start)
     container.files.put("/etc/jupyterhub-singleuser-environment", env_file)
     container.files.put("/etc/systemd/system/jupyterhub-singleuser.service", unit_file)
     container.start()
