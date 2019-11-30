@@ -85,6 +85,7 @@ class LXDSpawner(Spawner):
             self.start_timeout,
             self.cpu_limit,
             self.mem_limit,
+            self.user.server.port
         )
 
         #self.ip = addr

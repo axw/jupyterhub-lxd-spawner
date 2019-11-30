@@ -36,7 +36,8 @@ def start(client,
           env,
           start_timeout,
           cpu_limit,
-          mem_limit):
+          mem_limit,
+          port):
     """
     start starts a LXD container running the jupyterhub-singleuser program.
     """
@@ -48,9 +49,10 @@ def start(client,
 
     # Set cpu/mem limits.
     config['limits.memory'] = mem_limit
-    config['limits.cpu'] = "{}".format(math.ceil(cpu_limit))
-    if cpu_limit < 1:
-        config['limits.cpu.allowance'] = "{}%".format(cpu_limit * 100)
+    if cpu_limit is not None:
+        config['limits.cpu'] = "{}".format(math.ceil(cpu_limit))
+        if cpu_limit < 1:
+            config['limits.cpu.allowance'] = "{}%".format(cpu_limit * 100)
 
     # TODO(axw) make arch and profiles configurable
     container = client.containers.create({
@@ -82,12 +84,7 @@ def start(client,
         if running is None:
             addr = _container_addr(container)
 
-            # The port doesn't need to be random because each instance runs on
-            # a different container, and is easier since is the default for
-            # jupyterhub-singleuser
-            port = 8888
             return addr, port
-            #return self.user.server.ip, self.user.server.port
         time.sleep(1)
     return None
 
@@ -122,15 +119,17 @@ def poll(client, container_name):
         return None
     elif status == "inactive":
         return 0
-    # The process failed, so parse the output of
-    # "systemctl status" to get the exit code.
-    res = container.execute(["/bin/systemctl", "status", "jupyterhub-singleuser"])
-    line = res.stdout.split("Main PID:")[1].split("\n")[0]
-    match = _systemctl_status_status_re.match(line)
-    if match is None:
-        # Could not parse the output, so return 0 as per the guidelines.
-        return 0
-    return int(match.group(1))
+    # TODO: Below code is broken, should fix
+    return 1
+    ## The process failed, so parse the output of
+    ## "systemctl status" to get the exit code.
+    #res = container.execute(["/bin/systemctl", "status", "jupyterhub-singleuser"])
+    #line = res.stdout.split("Main PID:")[1].split("\n")[0]
+    #match = _systemctl_status_status_re.match(line)
+    #if match is None:
+    #    # Could not parse the output, so return 0 as per the guidelines.
+    #    return 0
+    #return int(match.group(1))
 
 
 def _container_addr(container):
