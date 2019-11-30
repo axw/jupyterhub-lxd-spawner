@@ -23,7 +23,7 @@ class LXDSpawner(Spawner):
     )
 
     container_name_template = Unicode(
-        'jupyterhub-singleuser-{username}',
+        'jupyterhub-singleuser-instance-{username}',
         config=True,
         help='Template for naming the LXD containers. {username} is expanded.'
     )
