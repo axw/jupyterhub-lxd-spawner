@@ -56,7 +56,7 @@ def start(client,
     container = client.containers.create({
         'name': container_name,
         'config': config,
-        'profiles': ['gpgpu']
+        'profiles': ['gpgpu'],
         'source': {
             'type': 'image',
             # TODO(axw) make image alias configurable,
