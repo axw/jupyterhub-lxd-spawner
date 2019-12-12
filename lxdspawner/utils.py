@@ -30,6 +30,10 @@ runcmd:
  - systemctl start jupyterhub-singleuser.service
 """
 
+def write_env(container, env):
+    env_file = "\n".join("{}={}".format(k, v) for (k, v) in env.items())
+    container.files.put("/etc/jupyterhub-singleuser-environment", env_file)
+
 def launch(client,
           container_name,
           cmd,
@@ -65,10 +69,9 @@ def launch(client,
     }, wait=True)
 
     exec_start = subprocess.list2cmdline(cmd)
-    env_file = "\n".join("{}={}".format(k, v) for (k, v) in env.items())
     unit_file = unit_file_template.format(exec_start)
-    container.files.put("/etc/jupyterhub-singleuser-environment", env_file)
     container.files.put("/etc/systemd/system/jupyterhub-singleuser.service", unit_file)
+    write_env(container, env)
     return container
 
 def start(client,
@@ -77,13 +80,13 @@ def start(client,
           env,
           start_timeout,
           cpu_limit,
-          mem_limit,
-          port):
+          mem_limit):
     """
     start starts a LXD container running the jupyterhub-singleuser program.
     """
     try:
         container = client.containers.get(container_name)
+        write_env(container, env)
     except pylxd.exceptions.NotFound:
         container = launch(client, container_name, cmd, env, cpu_limit, mem_limit)
 
@@ -97,7 +100,7 @@ def start(client,
         if running is None:
             addr = _container_addr(container)
 
-            return addr, port
+            return addr, 8888
         time.sleep(1)
     return None
 

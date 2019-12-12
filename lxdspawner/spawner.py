@@ -77,6 +77,7 @@ class LXDSpawner(Spawner):
 
         cmd = self.cmd[:]
         cmd.extend(self.get_args())
+        cmd = list(filter(lambda opt: "--port=" not in opt, cmd))
         return utils.start(
             self.client,
             self.container_name,
@@ -84,9 +85,8 @@ class LXDSpawner(Spawner):
             self.get_env(),
             self.start_timeout,
             self.cpu_limit,
-            self.mem_limit,
-            self.user.server.port
-        )
+            self.mem_limit
+            )
 
         #self.ip = addr
         #self.port = port
