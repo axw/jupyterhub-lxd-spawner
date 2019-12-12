@@ -30,18 +30,12 @@ runcmd:
  - systemctl start jupyterhub-singleuser.service
 """
 
-def start(client,
+def launch(client,
           container_name,
           cmd,
           env,
-          start_timeout,
           cpu_limit,
-          mem_limit,
-          port):
-    """
-    start starts a LXD container running the jupyterhub-singleuser program.
-    """
-
+          mem_limit):
     config = {
         # Inject cloud-config to enable/start the systemd unit.
         "user.user-data": cloud_config,
@@ -75,7 +69,26 @@ def start(client,
     unit_file = unit_file_template.format(exec_start)
     container.files.put("/etc/jupyterhub-singleuser-environment", env_file)
     container.files.put("/etc/systemd/system/jupyterhub-singleuser.service", unit_file)
-    container.start()
+    return container
+
+def start(client,
+          container_name,
+          cmd,
+          env,
+          start_timeout,
+          cpu_limit,
+          mem_limit,
+          port):
+    """
+    start starts a LXD container running the jupyterhub-singleuser program.
+    """
+    try:
+        container = client.containers.get(container_name)
+    except pylxd.exceptions.NotFound:
+        container = launch(client, container_name, cmd, env, cpu_limit, mem_limit)
+
+    if container.status != 'Running':
+        container.start()
 
     # Wait for the single-user process to be running, which implies that the
     # container has a network address assigned.
@@ -99,7 +112,6 @@ def stop(client, container_name):
         return
     if container.status == 'Running':
         container.stop(wait=True)
-        container.delete(wait=True)
 
 _systemctl_status_status_re = re.compile("status=[0-9]+(?:/[^)]+)")
 
