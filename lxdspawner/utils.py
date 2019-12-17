@@ -89,8 +89,10 @@ def start(client,
         write_env(container, env)
     except pylxd.exceptions.NotFound:
         container = launch(client, container_name, cmd, env, cpu_limit, mem_limit)
-
-    if container.status != 'Running':
+   
+    if container.status == "Running":
+        container.execute(["systemctl", "restart", "jupyterhub-singleuser"])
+    else:
         container.start()
 
     # Wait for the single-user process to be running, which implies that the
