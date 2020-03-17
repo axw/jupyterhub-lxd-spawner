@@ -1,10 +1,153 @@
 from traitlets import Unicode
 
+import math
+import re
+import subprocess
+import time
+
 import pylxd
 from jupyterhub.spawner import Spawner
 from tornado import gen
 
-from lxdspawner import utils
+unit_file_template = """\
+[Unit]
+Description=jupyterhub-singleuser
+
+[Service]
+Type=simple
+ExecStart={}
+EnvironmentFile=/etc/jupyterhub-singleuser-environment
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+cloud_config = """\
+#cloud-config
+bootcmd:
+ - systemctl daemon-reload
+ - systemctl enable jupyterhub-singleuser.service
+runcmd:
+ - systemctl start jupyterhub-singleuser.service
+"""
+
+def write_env(container, env):
+    env_file = "\n".join("{}={}".format(k, v) for (k, v) in env.items())
+    container.files.put("/etc/jupyterhub-singleuser-environment", env_file)
+
+def launch(client,
+          container_name,
+          cmd,
+          env,
+          cpu_limit,
+          mem_limit):
+    config = {
+        # Inject cloud-config to enable/start the systemd unit.
+        "user.user-data": cloud_config,
+    }
+
+    # Set cpu/mem limits.
+    config['limits.memory'] = mem_limit
+    if cpu_limit is not None:
+        config['limits.cpu'] = "{}".format(math.ceil(cpu_limit))
+        if cpu_limit < 1:
+            config['limits.cpu.allowance'] = "{}%".format(cpu_limit * 100)
+
+    # TODO(axw) make arch and profiles configurable
+    container = client.containers.create({
+        'name': container_name,
+        'config': config,
+        'profiles': ['gpgpu'],
+        'source': {
+            'type': 'image',
+            # TODO(axw) make image alias configurable,
+            # or use configurable properties.
+            #
+            # TODO(axw) make it possible to use remote
+            # image source
+            'alias': 'jupyterhub-singleuser',
+        },
+    }, wait=True)
+
+    exec_start = subprocess.list2cmdline(cmd)
+    unit_file = unit_file_template.format(exec_start)
+    container.files.put("/etc/systemd/system/jupyterhub-singleuser.service", unit_file)
+    write_env(container, env)
+    return container
+
+_systemctl_status_status_re = re.compile("status=[0-9]+(?:/[^)]+)")
+
+def poll(client, container_name):
+    """
+    poll checks if the jupyterhub-singleuser program is running.
+    """
+    try:
+        container = client.containers.get(container_name)
+    except pylxd.exceptions.NotFound:
+        return 0 # No container => process not running.
+    if container.status != 'Running':
+        return 0 # Container not running => process not running.
+    res = container.execute(["/bin/systemctl", "is-active", "jupyterhub-singleuser"])
+    status = res.stdout.rstrip()
+    if status == "active":
+        return None
+    elif status == "inactive":
+        return 0
+    # TODO: Below code is broken, should fix
+    return 1
+    ## The process failed, so parse the output of
+    ## "systemctl status" to get the exit code.
+    #res = container.execute(["/bin/systemctl", "status", "jupyterhub-singleuser"])
+    #line = res.stdout.split("Main PID:")[1].split("\n")[0]
+    #match = _systemctl_status_status_re.match(line)
+    #if match is None:
+    #    # Could not parse the output, so return 0 as per the guidelines.
+    #    return 0
+    #return int(match.group(1))
+
+def query_container_addr(container):
+    st = container.state()
+    assert st.status == 'Running'
+    addresses = st.network['eth0']['addresses']
+    for a in addresses:
+        if a['scope'] == 'global' and a['family'] == 'inet':
+            return a['address']
+    raise ValueError("no global inet address found")
+
+def start(client,
+          container_name,
+          cmd,
+          env,
+          start_timeout,
+          cpu_limit,
+          mem_limit):
+    """
+    start starts a LXD container running the jupyterhub-singleuser program.
+    """
+    try:
+        container = client.containers.get(container_name)
+        write_env(container, env)
+    except pylxd.exceptions.NotFound:
+        container = launch(client, container_name, cmd, env, cpu_limit, mem_limit)
+
+    if container.status == "Running":
+        container.execute(["systemctl", "restart", "jupyterhub-singleuser"])
+    else:
+        container.start()
+
+    # Wait for the single-user process to be running, which implies that the
+    # container has a network address assigned.
+    for i in range(start_timeout):
+        running = poll(client, container_name)
+        if running is None:
+            addr = query_container_addr(container)
+
+            return addr, 8888
+        time.sleep(1)
+    return None
 
 class LXDSpawner(Spawner):
     lxd_endpoint = Unicode(
@@ -78,7 +221,7 @@ class LXDSpawner(Spawner):
         cmd = self.cmd[:]
         cmd.extend(self.get_args())
         cmd = list(filter(lambda opt: "--port=" not in opt, cmd))
-        return utils.start(
+        result = start(
             self.client,
             self.container_name,
             cmd,
@@ -88,16 +231,24 @@ class LXDSpawner(Spawner):
             self.mem_limit
             )
 
-        #self.ip = addr
-        #self.port = port
-        #self.db.commit()
-        return addr, port
+        if result:
+            self.ip = result[0]
+            self.port = result[1]
+            return (self.ip, self.port)
+
+        return None
 
     @gen.coroutine
     def stop(self):
-        utils.stop(self.client, self.container_name)
+        try:
+            container = self.client.containers.get(self.container_name)
+        except pylxd.exceptions.NotFound:
+            # No container, nothing to do.
+            return
+        if container.status == 'Running':
+            container.stop(wait=True)
 
     @gen.coroutine
     def poll(self):
-        return utils.poll(self.client, self.container_name)
+        return poll(self.client, self.container_name)
 
