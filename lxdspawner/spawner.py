@@ -60,7 +60,7 @@ def launch(client,
     container = client.containers.create({
         'name': container_name,
         'config': config,
-        'profiles': ['gpgpu'],
+        'profiles': ['jupyterhub-singleuser-limits'],
         'source': {
             'type': 'image',
             # TODO(axw) make image alias configurable,
