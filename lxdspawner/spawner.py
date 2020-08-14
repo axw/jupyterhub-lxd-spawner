@@ -139,6 +139,9 @@ def start(client,
         container = client.containers.get(container_name)
         write_env(container, env)
     except pylxd.exceptions.NotFound:
+        if subprocess.run(['lxd', 'profile', 'show', container_profile]).returncode == 1:
+            return False
+
         container = launch(client, container_name, container_profile,
                            container_image_alias, cmd, env, cpu_limit, mem_limit)
 
@@ -259,6 +262,9 @@ class LXDSpawner(Spawner):
             self.ip = result[0]
             self.port = result[1]
             return (self.ip, self.port)
+        elif result == False:
+            self.log.error('container profile: % s does not exist',
+                           self.container_profile)
 
         return None
 
