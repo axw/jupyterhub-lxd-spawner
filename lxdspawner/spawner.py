@@ -139,7 +139,7 @@ def start(client,
         container = client.containers.get(container_name)
         write_env(container, env)
     except pylxd.exceptions.NotFound:
-        if subprocess.run(['lxd', 'profile', 'show', container_profile]).returncode == 1:
+        if subprocess.run(['lxc', 'profile', 'show', container_profile]).returncode == 1:
             return False
 
         container = launch(client, container_name, container_profile,
