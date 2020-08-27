@@ -131,7 +131,8 @@ def start(client,
           env,
           start_timeout,
           cpu_limit,
-          mem_limit):
+          mem_limit,
+          logger):
     """
     start starts a LXD container running the jupyterhub-singleuser program.
     """
@@ -139,6 +140,11 @@ def start(client,
         container = client.containers.get(container_name)
         write_env(container, env)
     except pylxd.exceptions.NotFound:
+        if not client.profiles.exists(container_profile):
+            logger.error('container profile: % s does not exist',
+                         container_profile)
+            return None
+
         container = launch(client, container_name, container_profile,
                            container_image_alias, cmd, env, cpu_limit, mem_limit)
 
@@ -252,7 +258,8 @@ class LXDSpawner(Spawner):
             self.get_env(),
             self.start_timeout,
             self.cpu_limit,
-            self.mem_limit
+            self.mem_limit,
+            self.log
         )
 
         if result:
