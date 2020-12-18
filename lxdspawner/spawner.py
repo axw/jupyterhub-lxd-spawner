@@ -4,6 +4,7 @@ import math
 import re
 import subprocess
 import time
+import requests
 
 import pylxd
 from jupyterhub.spawner import Spawner
@@ -132,7 +133,8 @@ def start(client,
           start_timeout,
           cpu_limit,
           mem_limit,
-          logger):
+          logger,
+          iris_url):
     """
     start starts a LXD container running the jupyterhub-singleuser program.
     """
@@ -149,8 +151,21 @@ def start(client,
                            container_image_alias, cmd, env, cpu_limit, mem_limit)
 
     if container.status == "Running":
+        # 既にコンテナが動いている場合グラボを専有していると前提
         container.execute(["systemctl", "restart", "jupyterhub-singleuser"])
     else:
+        # PCIアドレスを指定して専有
+        try:
+            r = requests.get(iris_url)
+            r.raise_for_status()
+        except requests.exceptions.HTTPError:
+            logger.error('iris api server error, Status Code: % d',
+                         r.status_code)
+            return None
+
+        vacant_gpu_pci = r.json()['Pci']
+        container.devices = {'gpu': {'type': 'gpu', 'pci': vacant_gpu_pci}}
+        container.save()
         container.start()
 
     # Wait for the single-user process to be running, which implies that the
@@ -195,6 +210,11 @@ class LXDSpawner(Spawner):
     container_image_alias = Unicode(
         config=True,
         help='Client image alias for single user\' container'
+    )
+
+    iris_url = Unicode(
+        config=True,
+        help='Iris Application URL'
     )
 
     def __init__(self, *args, **kwargs):
@@ -259,7 +279,8 @@ class LXDSpawner(Spawner):
             self.start_timeout,
             self.cpu_limit,
             self.mem_limit,
-            self.log
+            self.log,
+            self.iris_url
         )
 
         if result:
@@ -282,4 +303,3 @@ class LXDSpawner(Spawner):
     @gen.coroutine
     def poll(self):
         return poll(self.client, self.container_name)
-
