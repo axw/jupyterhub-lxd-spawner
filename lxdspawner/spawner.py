@@ -147,6 +147,7 @@ def start(client,
                          container_profile)
             return None
 
+        # GPUの存在関係なくコンテナを作成
         container = launch(client, container_name, container_profile,
                            container_image_alias, cmd, env, cpu_limit, mem_limit)
 
@@ -164,6 +165,11 @@ def start(client,
             return None
 
         vacant_gpu_pci = r.json()['Pci']
+
+        if vacant_gpu_pci == '':
+            logger.error('can\'t allocate gpu')
+            return None
+
         container.devices = {'gpu': {'type': 'gpu', 'pci': vacant_gpu_pci}}
         container.save()
         container.start()
