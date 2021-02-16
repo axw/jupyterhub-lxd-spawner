@@ -157,7 +157,8 @@ def start(client,
     else:
         # PCIアドレスを指定して専有
         try:
-            r = requests.get(iris_url)
+            # ex: http://iris-tippy.lxd
+            r = requests.get("{}-{}.lxd".format(iris_url, container.location))
             r.raise_for_status()
         except requests.exceptions.HTTPError:
             logger.error('iris api server error, Status Code: % d',
