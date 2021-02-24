@@ -165,7 +165,7 @@ def start(client,
                          r.status_code)
             return None
 
-        vacant_gpu_pci = r.json()['Pci']
+        vacant_gpu_pci = r.json()['pci']
 
         if vacant_gpu_pci == '':
             logger.error('can\'t allocate gpu')
