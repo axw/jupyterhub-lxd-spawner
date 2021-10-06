@@ -159,7 +159,7 @@ def start(client,
         try:
             cluster = client.cluster.get()
             iris_url = "{}-{}.lxd".format(
-                iris_url_base, container.location) if cluster.enabled else "{}.lxd".format(iris_url)
+                iris_url_base, container.location) if cluster.enabled else "{}.lxd".format(iris_url_base)
             # ex: http://iris-tippy.lxd
             r = requests.get(iris_url)
             r.raise_for_status()
