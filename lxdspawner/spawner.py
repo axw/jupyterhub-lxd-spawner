@@ -134,7 +134,7 @@ def start(client,
           cpu_limit,
           mem_limit,
           logger,
-          iris_url):
+          iris_url_base):
     """
     start starts a LXD container running the jupyterhub-singleuser program.
     """
@@ -157,8 +157,11 @@ def start(client,
     else:
         # PCIアドレスを指定して専有
         try:
+            cluster = client.cluster.get()
+            iris_url = "{}-{}.lxd".format(
+                iris_url_base, container.location) if cluster.enabled else "{}.lxd".format(iris_url_base)
             # ex: http://iris-tippy.lxd
-            r = requests.get("{}-{}.lxd".format(iris_url, container.location))
+            r = requests.get(iris_url)
             r.raise_for_status()
         except requests.exceptions.HTTPError:
             logger.error('iris api server error, Status Code: % d',
@@ -219,7 +222,7 @@ class LXDSpawner(Spawner):
         help='Client image alias for single user\' container'
     )
 
-    iris_url = Unicode(
+    iris_url_base = Unicode(
         config=True,
         help='Iris Application URL'
     )
@@ -287,7 +290,7 @@ class LXDSpawner(Spawner):
             self.cpu_limit,
             self.mem_limit,
             self.log,
-            self.iris_url
+            self.iris_url_base
         )
 
         if result:
