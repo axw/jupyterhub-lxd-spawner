@@ -175,7 +175,7 @@ def start(client,
             return None
 
         container.devices = {'gpu': {'type': 'gpu', 'pci': vacant_gpu_pci}}
-        container.save()
+        container.save(wait=True)
         container.start()
 
     # Wait for the single-user process to be running, which implies that the
